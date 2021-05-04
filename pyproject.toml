@@ -1,0 +1,51 @@
+[tool.poetry]
+name = "cotton_flower_mot"
+version = "0.1.0"
+description = "Multi-object tracking for cotton flowers."
+authors = ["Daniel Petti <djpetti@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "~3.9"
+loguru = "^0.5.3"
+pomdp_py = {git = "https://github.com/h2r/pomdp-py.git", rev = "master"}
+Cython = "^0.29.23"
+pydantic = "^1.8.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2.2"
+pytest-mock = "^3.5.1"
+pytest-black = "^0.3.12"
+black = "^20.8b1"
+isort = "^5.7.0"
+pre-commit = "^2.11.0"
+pytest-coverage = "^0.0"
+pytest-flake8 = "^1.0.7"
+
+[tool.black]
+line-length = 79
+exclude = '''
+(
+  /(
+      \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.venv
+    | build
+    | dist
+  )/
+)
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 79
+skip = "('.eggs', '.git', '.venv', 'build', 'dist')"
+
+[tool.kedro]
+package_name = "hearts_pomdp"
+project_name = "Hearts POMDP"
+project_version = "0.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

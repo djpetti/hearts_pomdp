@@ -158,27 +158,25 @@ class TransitionModel(pomdp_py.TransitionModel):
             return set()
 
         lead_suit = next_state.player_1_play.suit
-        lead_value = next_state.player_1_play.value
-        # We have to follow suit with a higher-value card.
-        higher_value_cards = {
-            c
-            for c in state.player_2_hand
-            if c.suit == lead_suit and c.value.value > lead_value
-        }
+        # We have to follow suit.
+        same_suit = {c for c in state.player_2_hand if c.suit == lead_suit}
 
-        if len(higher_value_cards) > 0:
+        if len(same_suit) > 0:
             # Choose from one of these.
-            return higher_value_cards
+            return same_suit
 
-        # Otherwise, we can play any card that we have.
-        possible_plays = state.player_2_hand
+        # Otherwise, we can play any other suit.
+        non_lead_suit = {c for c in state.player_2_hand if c.suit != lead_suit}
+        possible_plays = non_lead_suit
         if state.is_first_trick:
             # On the first trick, we can't play hearts if we don't have to or
             # the queen of spades.
-            possible_plays -= {cls._QUEEN_OF_SPADES} - cls._ALL_HEARTS
+            possible_plays = (
+                non_lead_suit - {cls._QUEEN_OF_SPADES} - cls._ALL_HEARTS
+            )
             if len(possible_plays) == 0:
                 # In this case, we have no choice but to play a heart.
-                possible_plays = state.player_2_hand - {cls._QUEEN_OF_SPADES}
+                possible_plays = non_lead_suit - {cls._QUEEN_OF_SPADES}
 
         return possible_plays
 

@@ -26,7 +26,7 @@ class RewardModel(pomdp_py.RewardModel):
     """
     Reward for taking the queen of spades.
     """
-    _NOP_REWARD = -5.0
+    _NOP_REWARD = -15.0
     """
     Cost associated with a nop. We make this large, because the agent should
     always be able to make a play that does not result in a nop.

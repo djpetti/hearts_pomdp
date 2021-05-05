@@ -51,13 +51,8 @@ class Observation(pomdp_py.Observation):
     def __eq__(self, other: "Observation") -> bool:
         return (
             self.player_1_hand == other.player_1_hand
-            and self.player_2_hand == other.player_2_hand
             and self.player_2_play == other.player_2_play
         )
 
     def __hash__(self) -> int:
-        return (
-            hash(self.player_1_hand)
-            ^ hash(self.player_2_hand)
-            ^ hash(self.player_2_play)
-        )
+        return hash(self.player_1_hand) ^ hash(self.player_2_play)

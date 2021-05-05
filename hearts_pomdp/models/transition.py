@@ -1,13 +1,17 @@
 """
 Implements the transition model.
 """
+
+
+import dataclasses as py_dataclasses
 import random
-from typing import AbstractSet, Any, Optional
+from typing import AbstractSet, Any
 
 import pomdp_py
 
 from ..action import Action
 from ..state import ALL_CARDS, Card, CardValue, State, Suit
+from ..utils import agent_won_trick
 
 
 class TransitionModel(pomdp_py.TransitionModel):
@@ -20,129 +24,59 @@ class TransitionModel(pomdp_py.TransitionModel):
     _ALL_HEARTS = {c for c in ALL_CARDS if c.suit == Suit.HEARTS}
 
     @classmethod
-    def __deterministic_next_state(cls, state: State, action: Action) -> State:
+    def __transition_common(cls, state: State) -> State:
         """
-        Computes the parts of the next state that are known deterministically.
+        Performs the parts of the state transition that are common to all
+        transitions and deterministic.
 
         Args:
             state: The current state.
-            action: The action being taken.
 
         Returns:
-            The next state. The parts that cannot be known deterministically
-            will be arbitrary.
+            The updated state.
 
         """
-        nop_state = State(
-            player_1_hand=state.player_1_hand,
-            player_2_hand=state.player_2_hand,
-            held_out_cards=state.held_out_cards,
-            is_first_trick=state.is_first_trick,
-            player_1_play=None,
-            player_2_play=None,
-        )
-
-        if action.card is None:
-            # Nop action.
-            return nop_state
-        if action.card not in state.player_1_hand:
-            # We can't play a card we don't have, so this ends up being a nop.
-            return nop_state
-
-        if state.is_first_trick:
-            if (
-                action.card != cls._TWO_OF_CLUBS
-                and cls._TWO_OF_CLUBS in state.player_1_hand
-            ):
-                # If we have the two of clubs, we must lead with it.
-                return nop_state
-            elif action.card == cls._QUEEN_OF_SPADES:
-                # We can never play the queen of spades on the first trick.
-                return nop_state
-            has_suits = {c.suit for c in state.player_1_hand}
-            if action.card.suit == Suit.HEARTS and len(has_suits) > 1:
-                # We cannot play a heart on the first trick if we have other
-                # options.
-                return nop_state
-
-        # Play the selected card.
-        return State(
-            player_1_hand=state.player_1_hand - {action.card},
-            player_2_hand=state.player_2_hand,
-            held_out_cards=state.held_out_cards,
+        return py_dataclasses.replace(
+            state,
             is_first_trick=False,
-            player_1_play=action.card,
-            player_2_play=None,
+            # A partial trick becomes the current trick.
+            opponent_play=state.opponent_partial_play,
+            opponent_partial_play=None,
         )
 
-    @staticmethod
-    def __draw_probability(
-        card_set: AbstractSet, card: Optional[Card]
-    ) -> float:
+    @classmethod
+    def __possible_first_plays(cls, state: State) -> AbstractSet[Card]:
         """
-        Small helper function that determines the probability that we will
-        draw a specific card from a set of cards.
+        Determines the possible cards that the first player can lead with
+        while still following the rules.
 
         Args:
-            card_set: The set of cards to draw from.
-            card: The card we are drawing.
-
-        Returns:
-            The probability that this card will be drawn.
-
-        """
-        if card in card_set:
-            return 1.0 / len(card_set)
-        elif card is None and len(card_set) == 0:
-            # Special case: we don't have any cards, and we're not picking one.
-            return 1.0
-
-        # Not in the set.
-        return 0.0
-
-    @staticmethod
-    def __opponent_play_obeys_semantics(
-        next_state: State, state: State
-    ) -> bool:
-        """
-        Determines whether player 2's play obeys the semantics of the state.
-
-        Args:
-            next_state: The final state.
             state: The initial state.
 
         Returns:
-            True if it obeys the semantics, false otherwise.
+            The set of cards that player 1 can legally play.
 
         """
-        if next_state.player_1_play is None:
-            # If the first player is not taking an action, we can't either.
-            if (
-                next_state.player_2_play is not None
-                or next_state.player_2_hand != state.player_2_hand
-            ):
-                return False
+        if state.is_first_trick:
+            # We have to lead with the two of clubs. Note that a valid state
+            # initialization always makes the player with the two of clubs
+            # the first player, so if we don't have it, that's an error.
+            assert (
+                cls._TWO_OF_CLUBS in state.first_player_hand
+            ), "First player does not have two of clubs."
+            return {cls._TWO_OF_CLUBS}
 
-        elif next_state.player_2_play is None:
-            # If the agent played a card, the opponent must play one too.
-            return False
-
-        new_expected_hand = next_state.player_2_hand
-        if state.player_2_play is not None:
-            new_expected_hand -= {state.player_2_play}
-        if next_state.player_2_hand != new_expected_hand:
-            # Our new hand must reflect the card we played.
-            return False
-
-        return True
+        else:
+            # Nominally, we can lead with anything.
+            return state.first_player_hand
 
     @classmethod
-    def __possible_opponent_plays(
+    def __possible_second_plays(
         cls, next_state: State, state: State
     ) -> AbstractSet[Card]:
         """
-        Determines the possible cards that the opponent can play while still
-        following the rules.
+        Determines the possible cards that the second player can play while
+        still following the rules.
 
         Args:
             next_state: The known part of the final state, including player 1's
@@ -153,20 +87,24 @@ class TransitionModel(pomdp_py.TransitionModel):
             The set of cards that player 2 can legally play.
 
         """
-        if next_state.player_1_play is None:
+        if next_state.lead_play is None:
             # If the first player did nothing, we can't do anything either.
             return set()
 
-        lead_suit = next_state.player_1_play.suit
+        lead_suit = next_state.lead_play.suit
         # We have to follow suit.
-        same_suit = {c for c in state.player_2_hand if c.suit == lead_suit}
+        same_suit = {
+            c for c in state.second_player_hand if c.suit == lead_suit
+        }
 
         if len(same_suit) > 0:
             # Choose from one of these.
             return same_suit
 
         # Otherwise, we can play any other suit.
-        non_lead_suit = {c for c in state.player_2_hand if c.suit != lead_suit}
+        non_lead_suit = {
+            c for c in state.second_player_hand if c.suit != lead_suit
+        }
         possible_plays = non_lead_suit
         if state.is_first_trick:
             # On the first trick, we can't play hearts if we don't have to or
@@ -181,65 +119,139 @@ class TransitionModel(pomdp_py.TransitionModel):
         return possible_plays
 
     @classmethod
-    def __opponent_play_probability(
-        cls, next_state: State, state: State
-    ) -> float:
+    def __handle_trick_winner(cls, next_state: State) -> State:
         """
-        Determines the probability of the second player making a particular
-        move.
+        If the opponent wins, they go first next trick. This is simulated by
+        immediately updating the state again. This method checks for this
+        condition and performs the necessary state update if it is met.
 
         Args:
-            next_state: The final state.
-            state: The initial state.
+            next_state: The partially-updated state encompassing the results
+                of the current trick.
 
         Returns:
-            The probability of reaching this final state, given that the
-            portions of the state governed by the first player are already
-            known.
+            The updated state.
 
         """
-        if not cls.__opponent_play_obeys_semantics(next_state, state):
-            return 0.0
+        # Determine the first player for the next trick.
+        next_state = py_dataclasses.replace(
+            next_state, agent_goes_first=agent_won_trick(next_state)
+        )
+        if next_state.agent_goes_first:
+            # The agent goes first next round. No need to do anything else.
+            return next_state
 
-        possible_plays = cls.__possible_opponent_plays(next_state, state)
-        return cls.__draw_probability(possible_plays, next_state.player_2_play)
+        # Otherwise, we have to simulate the first play by the opponent.
+        player_1_plays = cls.__possible_first_plays(next_state)
+        if len(player_1_plays) == 0:
+            # We are out of cards to play, so we don't have to do anything.
+            return next_state
 
-    def probability(
-        self, next_state: State, state: State, action: Action, **kwargs: Any
-    ) -> float:
+        # Choose a random card to play.
+        player_1_hand = next_state.first_player_hand
+        player_1_play = random.choice(tuple(player_1_plays))
+        player_1_hand -= {player_1_play}
+
+        return py_dataclasses.replace(
+            next_state,
+            opponent_hand=player_1_hand,
+            # Update the partial play variable since this is technically a
+            # new trick.
+            opponent_partial_play=player_1_play,
+        )
+
+    @classmethod
+    def __sample_agent_is_first(cls, state: State, action: Action) -> State:
         """
-        Calculates `P(s' | s, a)`.
+        Handles the sampling in the case that the agent is the first player.
 
         Args:
-            next_state: The resulting state.
-            state: The initial state.
-            action: The action we are taking.
-            **kwargs: Will be ignored.
+            state: The current state.
+            action: The action to take.
 
         Returns:
-            The probability to transitioning to the next state from the
-            initial state after taking the specified action.
+            The sampled next state.
 
         """
-        # Check the deterministic part of the state.
-        known_actual = (
-            next_state.player_1_hand,
-            next_state.held_out_cards,
-            next_state.is_first_trick,
-            next_state.player_1_play,
+        nop_state = py_dataclasses.replace(
+            state, agent_play=None, opponent_play=None
         )
-        deterministic_state = self.__deterministic_next_state(state, action)
-        known_expected = (
-            deterministic_state.player_1_hand,
-            deterministic_state.held_out_cards,
-            deterministic_state.is_first_trick,
-            deterministic_state.player_1_play,
-        )
-        if known_actual != known_expected:
-            return 0.0
 
-        # Check the opponent's play.
-        return self.__opponent_play_probability(next_state, state)
+        # The first trick flag will always be set to false.
+        next_state = cls.__transition_common(state)
+
+        # Determine possible plays for the agent.
+        player_1_plays = cls.__possible_first_plays(state)
+        # Make sure that our action is valid.
+        if action.card is None or action.card not in player_1_plays:
+            # Action is invalid. This is a nop.
+            return nop_state
+
+        # Update the state with the action.
+        player_1_hand = state.first_player_hand
+        player_1_hand -= {action.card}
+        next_state = py_dataclasses.replace(
+            next_state, agent_play=action.card, agent_hand=player_1_hand
+        )
+
+        # Determine possible plays for player 2.
+        player_2_plays = cls.__possible_second_plays(next_state, state)
+        assert len(player_2_plays) > 0, "Player 2 ended up with fewer cards."
+
+        # Select one randomly.
+        player_2_play = random.choice(tuple(player_2_plays))
+        player_2_hand = state.second_player_hand
+        player_2_hand -= {player_2_play}
+
+        next_state = py_dataclasses.replace(
+            next_state,
+            opponent_hand=player_2_hand,
+            opponent_play=player_2_play,
+        )
+
+        # Handle additional modifications based on the winner of this trick.
+        return cls.__handle_trick_winner(next_state)
+
+    @classmethod
+    def __sample_agent_is_second(cls, state: State, action: Action) -> State:
+        """
+        Handles the sampling in the case that the agent is the second player.
+
+        Args:
+            state: The current state.
+            action: The action to take.
+
+        Returns:
+            The sampled next state.
+
+        """
+        nop_state = py_dataclasses.replace(
+            state, agent_play=None, opponent_play=None
+        )
+
+        # The first trick flag will always be set to false.
+        next_state = cls.__transition_common(state)
+        # In this case, we should already be halfway done with the trick from
+        # the previous state update.
+        if next_state.lead_play is None:
+            # The opponent did a nop, so we have to do the same.
+            return nop_state
+
+        player_2_plays = cls.__possible_second_plays(next_state, state)
+        assert len(player_2_plays) > 0, "Player 2 ended up with fewer cards."
+        if action.card not in player_2_plays:
+            # Action is invalid. This is a nop.
+            return nop_state
+
+        # Update the state.
+        player_2_hand = state.second_player_hand
+        player_2_hand -= {action.card}
+        next_state = py_dataclasses.replace(
+            next_state, agent_hand=player_2_hand, agent_play=action.card
+        )
+
+        # Handle additional modifications based on the winner of this trick.
+        return cls.__handle_trick_winner(next_state)
 
     def sample(self, state: State, action: Action, **kwargs: Any) -> State:
         """
@@ -252,28 +264,10 @@ class TransitionModel(pomdp_py.TransitionModel):
             **kwargs: Will be ignored.
 
         Returns:
-            The sampled next action.
+            The sampled next state.
 
         """
-        # Get the deterministic part of the next state.
-        fixed_next_state = self.__deterministic_next_state(state, action)
-
-        # Determine possible plays for player 2.
-        player_2_plays = self.__possible_opponent_plays(
-            fixed_next_state, state
-        )
-        player_2_play = None
-        player_2_hand = state.player_2_hand
-        if len(player_2_plays) > 0:
-            # Select one randomly.
-            player_2_play = random.sample(player_2_plays, 1)[0]
-            player_2_hand -= {player_2_play}
-
-        return State(
-            player_1_hand=fixed_next_state.player_1_hand,
-            player_2_hand=player_2_hand,
-            held_out_cards=fixed_next_state.held_out_cards,
-            is_first_trick=fixed_next_state.is_first_trick,
-            player_1_play=fixed_next_state.player_1_play,
-            player_2_play=player_2_play,
-        )
+        if state.agent_goes_first:
+            return self.__sample_agent_is_first(state, action)
+        else:
+            return self.__sample_agent_is_second(state, action)

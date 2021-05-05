@@ -67,7 +67,7 @@ class Hearts(pomdp_py.POMDP):
             A uniform belief.
 
         """
-        hand_size = len(state.player_2_hand)
+        hand_size = len(state.opponent_hand)
         num_held_out = len(state.held_out_cards)
         # Probability of any particular card being in the opponent's hand.
         num_combinations = math.comb(hand_size + num_held_out, hand_size)
@@ -81,9 +81,9 @@ class Hearts(pomdp_py.POMDP):
 
         # Enumerate all possible states.
         beliefs = {}
-        possible_player_2_cards = state.player_2_hand | state.held_out_cards
-        for hand in itertools.combinations(possible_player_2_cards, hand_size):
-            possible_state = py_dataclasses.replace(state, player_2_hand=hand)
+        possible_opponent_cards = state.opponent_hand | state.held_out_cards
+        for hand in itertools.combinations(possible_opponent_cards, hand_size):
+            possible_state = py_dataclasses.replace(state, opponent_hand=hand)
             beliefs[possible_state] = draw_probability
 
         return pomdp_py.Histogram(beliefs)

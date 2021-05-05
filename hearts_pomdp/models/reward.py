@@ -9,6 +9,7 @@ import pomdp_py
 
 from ..action import Action
 from ..state import Card, CardValue, State, Suit
+from ..utils import agent_won_trick
 
 
 class RewardModel(pomdp_py.RewardModel):
@@ -73,25 +74,14 @@ class RewardModel(pomdp_py.RewardModel):
             The associated reward.
 
         """
-        if (
-            next_state.player_1_play is None
-            or next_state.player_2_play is None
-        ):
+        if next_state.agent_play is None or next_state.opponent_play is None:
             # Nop.
             return self._NOP_REWARD
 
-        p1_card = next_state.player_1_play
-        p2_card = next_state.player_2_play
-
-        win_reward = self.__trick_reward({p1_card, p2_card})
-
-        if p1_card.suit == p2_card.suit:
-            # Higher value wins the trick.
-            if p1_card.value.value > p2_card.value.value:
-                return win_reward
-        else:
-            # The lead suit wins the trick.
+        win_reward = self.__trick_reward(
+            {next_state.lead_play, next_state.second_play}
+        )
+        if agent_won_trick(next_state):
             return win_reward
-
-        # We did not win the trick.
-        return 0.0
+        else:
+            return 0.0

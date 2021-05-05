@@ -32,7 +32,7 @@ class PolicyModel(pomdp_py.RandomRollout):
         # It would work fine to sample from the entire action space here.
         # However, since it's trivial, we might as well optimize by sampling
         # from only the cards in our hand.
-        card = random.sample(state.player_1_hand, 1)[0]
+        card = random.sample(state.agent_hand, 1)[0]
         return Action(play=card)
 
     def get_all_actions(self, *args: Any, **kwargs: Any) -> Set[Action]:
@@ -45,8 +45,4 @@ class PolicyModel(pomdp_py.RandomRollout):
             All possible actions in the POMDP.
 
         """
-        actions = {Action(play=c) for c in ALL_CARDS}
-        # Add the nop action.
-        actions.add(Action(play=None))
-
-        return actions
+        return {Action(play=c) for c in ALL_CARDS}

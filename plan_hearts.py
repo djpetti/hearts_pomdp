@@ -26,6 +26,11 @@ def update_planner(model: Hearts, planner: pomdp_py.Planner) -> None:
         planner: The POMDP planner to use.
 
     """
+    if model.env.state.agent_goes_first:
+        logger.info("Agent leads.")
+    else:
+        logger.info("Opponent leads.")
+
     # Determine the next action.
     logger.info("Planning next action...")
     action = planner.plan(model.agent)
@@ -36,11 +41,11 @@ def update_planner(model: Hearts, planner: pomdp_py.Planner) -> None:
     logger.info(
         "Action: {}, Our play: {}, Opponent's play: {}",
         action,
-        model.env.state.player_1_play,
-        model.env.state.player_2_play,
+        model.env.state.agent_play,
+        model.env.state.opponent_play,
     )
-    logger.info("Player 1 hand: {}", model.env.state.player_1_hand)
-    logger.info("Player 2 hand: {}", model.env.state.player_2_hand)
+    logger.info("Agent hand: {}", model.env.state.agent_hand)
+    logger.info("Opponent hand: {}", model.env.state.opponent_hand)
     logger.info("Reward: {}", reward)
 
     # Simulate an observation.

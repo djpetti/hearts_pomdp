@@ -36,24 +36,39 @@ class TestTransitionModel:
             action: The action that caused the transition.
 
         """
-        if next_state.player_1_play is None:
+        if next_state.agent_play is None:
             # Both players should have done nothing.
-            assert next_state.player_2_play is None
+            assert next_state.opponent_play is None
 
-            assert len(next_state.player_1_hand) == len(state.player_1_hand)
-            assert len(next_state.player_2_hand) == len(state.player_2_hand)
+            assert len(next_state.agent_hand) == len(state.agent_hand)
+            assert len(next_state.opponent_hand) == len(state.opponent_hand)
 
         else:
             # It should have played the card.
-            assert next_state.player_1_play == action.card
-            assert next_state.player_2_play is not None
-            assert next_state.player_2_play in state.player_2_hand
+            assert next_state.agent_play == action.card
+            assert next_state.opponent_play is not None
 
+            if state.opponent_partial_play is not None:
+                # The partial trick from last time should have become the
+                # current trick.
+                assert next_state.opponent_play == state.opponent_partial_play
+            else:
+                # Opponent should have played a new card this transition.
+                assert next_state.opponent_play in state.opponent_hand
+
+            # Opponent might play 0, one, or two cards.
+            cards_played = 0
+            if state.opponent_partial_play is None:
+                # Opponent should have played a new card this time.
+                cards_played += 1
+            if next_state.opponent_partial_play is not None:
+                # Opponent started the next trick.
+                cards_played += 1
+
+            assert len(next_state.agent_hand) == len(state.agent_hand) - 1
             assert (
-                len(next_state.player_1_hand) == len(state.player_1_hand) - 1
-            )
-            assert (
-                len(next_state.player_2_hand) == len(state.player_2_hand) - 1
+                len(next_state.opponent_hand)
+                == len(state.opponent_hand) - cards_played
             )
 
     @pytest.mark.parametrize("seed", range(10))
@@ -80,42 +95,39 @@ class TestTransitionModel:
         # Act.
         # Transition to the next state.
         next_state = transition_model.sample(initial_state, action)
-        state_prob = transition_model.probability(
-            next_state, initial_state, action
-        )
 
         # Assert.
         self.__check_transition_invariants(
             next_state=next_state, state=initial_state, action=action
         )
 
-        if two_of_clubs not in initial_state.player_1_hand:
+        if two_of_clubs not in initial_state.agent_hand:
             # We should have done nothing, because we didn't have the card.
-            assert next_state.player_1_play is None
+            assert next_state.agent_play is None
 
-        # No matter what, the probability of getting this result should be
-        # consistent.
-        assert state_prob > 0.0
-
-    def test_complete_game(self) -> None:
+    @pytest.mark.parametrize("seed", range(10))
+    def test_complete_game(self, seed: int) -> None:
         """
         Tests that we can simulate a complete game.
+
+        Args:
+            seed: The random seed to use for testing.
 
         """
         # Arrange.
         # Set the seed so we get a consistent initial state.
-        random.seed(1337)
+        random.seed(seed)
         # Get the initial state.
         state = random_initial_state()
 
         transition_model = TransitionModel()
 
         # Act and assert.
-        while len(state.player_1_hand) > 0:
-            hand_size = len(state.player_1_hand)
+        while len(state.agent_hand) > 0:
+            hand_size = len(state.agent_hand)
 
             # Systematically try playing every possible card.
-            for card in state.player_1_hand:
+            for card in state.agent_hand:
                 action = Action(play=card)
                 next_state = transition_model.sample(state, action)
 
@@ -123,13 +135,9 @@ class TestTransitionModel:
                 self.__check_transition_invariants(
                     next_state=next_state, state=state, action=action
                 )
-                assert (
-                    transition_model.probability(next_state, state, action)
-                    > 0.0
-                )
 
                 state = next_state
-                if len(state.player_1_hand) < hand_size:
+                if len(state.agent_hand) < hand_size:
                     # The play succeeded.
                     break
             else:

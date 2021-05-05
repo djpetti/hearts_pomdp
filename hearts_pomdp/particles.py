@@ -24,11 +24,11 @@ def random_particle(model: Hearts) -> State:
     # Determine the set of all cards that the agent knows could be in its
     # opponent's hand.
     state = model.env.state
-    possible_player_2_cards = state.player_2_hand | state.held_out_cards
-    player_2_hand = random.sample(
-        possible_player_2_cards, len(state.player_2_hand)
+    possible_player_2_cards = state.opponent_hand | state.held_out_cards
+    opponent_hand = random.sample(
+        possible_player_2_cards, len(state.opponent_hand)
     )
 
     return py_dataclasses.replace(
-        state, player_2_hand=frozenset(player_2_hand)
+        state, opponent_hand=frozenset(opponent_hand)
     )

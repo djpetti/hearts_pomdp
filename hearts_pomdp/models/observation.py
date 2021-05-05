@@ -30,10 +30,12 @@ class ObservationModel(pomdp_py.ObservationModel):
 
         """
         return Observation(
-            player_1_hand=state.player_1_hand,
+            agent_hand=state.agent_hand,
+            agent_play=state.agent_play,
+            opponent_play=state.opponent_play,
+            opponent_partial_play=state.opponent_partial_play,
             is_first_trick=state.is_first_trick,
-            player_1_play=state.player_1_play,
-            player_2_play=state.player_2_play,
+            agent_goes_first=state.agent_goes_first,
         )
 
     def probability(

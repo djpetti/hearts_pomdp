@@ -6,7 +6,7 @@ Represents the state of the POMDP.
 import enum
 import itertools
 import random
-from functools import cached_property, reduce
+from functools import cached_property
 from typing import Any, Dict, FrozenSet, Optional
 
 import pomdp_py
@@ -41,7 +41,7 @@ class CardValue(enum.IntEnum):
     ACE = 14
 
 
-@dataclass
+@dataclass(frozen=True)
 class Card:
     """
     Represents a specific card.
@@ -54,12 +54,6 @@ class Card:
 
     suit: Suit
     value: CardValue
-
-    def __eq__(self, other: "Card") -> bool:
-        return self.suit == other.suit and self.value == other.value
-
-    def __hash__(self) -> int:
-        return hash(self.suit) ^ hash(self.value)
 
 
 ALL_CARDS = frozenset(
@@ -76,33 +70,67 @@ class ObservableStateMixin:
     Encapsulates the portions of the state that are directly observable.
 
     Attributes:
-        player_1_hand: The contents of player one's hand.
+        agent_hand: The contents of the agent's hand.
+        agent_play: The agent's most recent play. Can be None if a nop
+            action was taken.
+        opponent_play: The opponent's most recent play. Can be None if a nop
+            action was taken.
+        opponent_partial_play: The opponent's play from a partial trick. This
+            can arise in a case where the opponent goes first the next trick
+            and this is handled in the transition for the previous trick.
+
         is_first_trick: Whether this is the first trick.
-        player_1_play: Player one's most recent play. Can be None if a nop
-            action was taken.
-        player_2_play: Player two's most recent play. Can be None if a nop
-            action was taken.
+        agent_goes_first: Whether the agent is going first in the next trick.
 
     """
 
-    player_1_hand: FrozenSet[Card]
-    is_first_trick: bool
-    player_1_play: Optional[Card]
-    player_2_play: Optional[Card]
+    agent_hand: FrozenSet[Card]
+    agent_play: Optional[Card]
+    opponent_play: Optional[Card]
+    opponent_partial_play: Optional[Card]
 
-    @validator("player_1_hand")
+    is_first_trick: bool
+    agent_goes_first: bool
+
+    @validator("agent_hand")
     def hand_1_is_not_too_big(cls, hand: FrozenSet[Card]) -> FrozenSet[Card]:
         assert len(hand) <= 13, "Cannot have more than 13 cards."
         return hand
 
-    @validator("player_2_play")
+    @validator("opponent_play")
     def plays_are_different(
         cls, player_2_play: Optional[Card], values: Dict[str, Any]
     ) -> Optional[Card]:
         assert (
-            player_2_play is None or player_2_play != values["player_1_play"]
+            player_2_play is None or player_2_play != values["agent_play"]
         ), "Players must play different cards."
         return player_2_play
+
+    @property
+    def lead_play(self) -> Optional[Card]:
+        """
+        Gets the card played by the first player in the most recent trick.
+
+        Returns:
+            The card, or None if it was a nop.
+
+        """
+        if self.agent_goes_first:
+            return self.agent_play
+        return self.opponent_play
+
+    @property
+    def second_play(self) -> Optional[Card]:
+        """
+        Gets the card played by the second player in the most recent trick.
+
+        Returns:
+            The card, or None if it was a nop.
+
+        """
+        if self.agent_goes_first:
+            return self.opponent_play
+        return self.agent_play
 
 
 @dataclass(frozen=True)
@@ -111,25 +139,25 @@ class State(pomdp_py.State, ObservableStateMixin):
     Represents the state of the game.
 
     Attributes:
-        player_2_hand: The contents of player two's hand.
+        opponent_hand: The contents of the opponent's hand.
         held_out_cards: The two cards that were not dealt to any hand.
 
     """
 
-    player_2_hand: FrozenSet[Card]
+    opponent_hand: FrozenSet[Card]
     held_out_cards: FrozenSet[Card]
 
-    @validator("player_2_hand")
+    @validator("opponent_hand")
     def hand_2_is_not_too_big(cls, hand: FrozenSet[Card]) -> FrozenSet[Card]:
         assert len(hand) <= 13, "Cannot have more than 13 cards."
         return hand
 
-    @validator("player_2_hand")
+    @validator("opponent_hand")
     def hands_are_disjoint(
         cls, player_2_hand: FrozenSet[Card], values: Dict[str, Any]
     ) -> FrozenSet[Card]:
         assert not (
-            player_2_hand & values["player_1_hand"]
+            player_2_hand & values["agent_hand"]
         ), "Hands cannot have the same card."
         return player_2_hand
 
@@ -147,6 +175,35 @@ class State(pomdp_py.State, ObservableStateMixin):
             - self.__held_out_cards
         )
 
+    @property
+    def first_player_hand(self) -> FrozenSet[Card]:
+        """
+        Gets the hand of the first player in the most recent trick.
+
+        Returns:
+            The hand.
+
+        """
+        if self.agent_goes_first:
+            return self.agent_hand
+        return self.opponent_hand
+
+    @property
+    def second_player_hand(self) -> FrozenSet[Card]:
+        """
+        Gets the hand of the second player in the most recent trick.
+
+        Returns:
+            The hand.
+
+        """
+        if self.agent_goes_first:
+            return self.opponent_hand
+        return self.agent_hand
+
+
+_TWO_OF_CLUBS = Card(suit=Suit.CLUBS, value=CardValue.TWO)
+
 
 def random_initial_state() -> State:
     """
@@ -158,17 +215,27 @@ def random_initial_state() -> State:
     """
     # Simulate the cards being dealt.
     deck = set(ALL_CARDS)
-    player_1_hand = frozenset(random.sample(deck, 13))
-    deck -= player_1_hand
-    player_2_hand = frozenset(random.sample(deck, 13))
-    deck -= player_2_hand
+    agent_hand = frozenset(random.sample(deck, 13))
+    deck -= agent_hand
+    opponent_hand = frozenset(random.sample(deck, 13))
+    deck -= opponent_hand
     held_out = frozenset(deck)
 
+    # Determine which player goes first.
+    agent_goes_first = _TWO_OF_CLUBS in agent_hand
+    opponent_partial_play = None
+    if not agent_goes_first:
+        # In this case, it expects us to perform the first opponent play.
+        opponent_partial_play = _TWO_OF_CLUBS
+        opponent_hand -= {_TWO_OF_CLUBS}
+
     return State(
-        player_1_hand=player_1_hand,
-        player_2_hand=player_2_hand,
+        agent_hand=agent_hand,
+        opponent_hand=opponent_hand,
         held_out_cards=held_out,
+        agent_play=None,
+        opponent_play=None,
+        opponent_partial_play=opponent_partial_play,
         is_first_trick=True,
-        player_1_play=None,
-        player_2_play=None,
+        agent_goes_first=agent_goes_first,
     )

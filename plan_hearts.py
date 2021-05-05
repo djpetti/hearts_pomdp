@@ -3,12 +3,14 @@ Script that performs policy planning with the hearts POMDP.
 """
 
 
+from functools import partial
+
 import pomdp_py
 from loguru import logger
 
 from hearts_pomdp.models.observation import ObservationModel
 from hearts_pomdp.models.pomdp import Hearts
-from hearts_pomdp.particles import HeartsParticles
+from hearts_pomdp.particles import random_particle
 
 # How long to allow for each planning step, in seconds.
 _MAX_PLAN_TIME = 5.0
@@ -46,14 +48,23 @@ def update_planner(model: Hearts, planner: pomdp_py.Planner) -> None:
     observation = model.env.provide_observation(observation_model, action)
 
     model.agent.update_history(action, observation)
-    planner.update(model.agent, action, observation)
+    # Use a non-naive method of reinvigorating the belief.
+    planner.update(
+        model.agent,
+        action,
+        observation,
+        # This is kind of a hack to bypass the naive particle reinvigoration
+        # that it uses by default. In this case, the state transformer
+        # function actually just generates a new particle from scratch.
+        state_transform_func=lambda s: random_particle(model),
+    )
 
 
 def main():
     # Create the model.
     model = Hearts()
     model.agent.set_belief(
-        HeartsParticles.from_histogram(
+        pomdp_py.Particles.from_histogram(
             model.agent.init_belief, num_particles=2000
         ),
         prior=True,

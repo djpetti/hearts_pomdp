@@ -71,14 +71,12 @@ The set of all cards in the game.
 
 
 @dataclass(frozen=True)
-class State(pomdp_py.State):
+class ObservableStateMixin:
     """
-    Represents the state of the game.
+    Encapsulates the portions of the state that are directly observable.
 
     Attributes:
         player_1_hand: The contents of player one's hand.
-        player_2_hand: The contents of player two's hand.
-        held_out_cards: The two cards that were not dealt to any hand.
         is_first_trick: Whether this is the first trick.
         player_1_play: Player one's most recent play. Can be None if a nop
             action was taken.
@@ -88,8 +86,6 @@ class State(pomdp_py.State):
     """
 
     player_1_hand: FrozenSet[Card]
-    player_2_hand: FrozenSet[Card]
-    held_out_cards: FrozenSet[Card]
     is_first_trick: bool
     player_1_play: Optional[Card]
     player_2_play: Optional[Card]
@@ -98,6 +94,30 @@ class State(pomdp_py.State):
     def hand_1_is_not_too_big(cls, hand: FrozenSet[Card]) -> FrozenSet[Card]:
         assert len(hand) <= 13, "Cannot have more than 13 cards."
         return hand
+
+    @validator("player_2_play")
+    def plays_are_different(
+        cls, player_2_play: Optional[Card], values: Dict[str, Any]
+    ) -> Optional[Card]:
+        assert (
+            player_2_play is None or player_2_play != values["player_1_play"]
+        ), "Players must play different cards."
+        return player_2_play
+
+
+@dataclass(frozen=True)
+class State(pomdp_py.State, ObservableStateMixin):
+    """
+    Represents the state of the game.
+
+    Attributes:
+        player_2_hand: The contents of player two's hand.
+        held_out_cards: The two cards that were not dealt to any hand.
+
+    """
+
+    player_2_hand: FrozenSet[Card]
+    held_out_cards: FrozenSet[Card]
 
     @validator("player_2_hand")
     def hand_2_is_not_too_big(cls, hand: FrozenSet[Card]) -> FrozenSet[Card]:
@@ -112,37 +132,6 @@ class State(pomdp_py.State):
             player_2_hand & values["player_1_hand"]
         ), "Hands cannot have the same card."
         return player_2_hand
-
-    @validator("player_2_play")
-    def plays_are_different(
-        cls, player_2_play: Optional[Card], values: Dict[str, Any]
-    ) -> Optional[Card]:
-        assert (
-            player_2_play is None or player_2_play != values["player_1_play"]
-        ), "Players must play different cards."
-        return player_2_play
-
-    def __eq__(self, other: "State") -> bool:
-        return (
-            self.player_1_hand == other.player_1_hand
-            and self.player_2_hand == other.player_2_hand
-            and self.held_out_cards == other.held_out_cards
-            and self.is_first_trick == other.is_first_trick
-            and self.player_1_play == other.player_1_play
-            and self.player_2_play == other.player_2_play
-        )
-
-    def __hash__(self) -> int:
-        factors = (
-            self.player_1_hand,
-            self.player_2_hand,
-            self.held_out_cards,
-            self.is_first_trick,
-            self.player_1_play,
-            self.player_2_play,
-        )
-        hashes = map(hash, factors)
-        return reduce(lambda a, b: a ^ b, hashes, 0)
 
     @cached_property
     def played_cards(self) -> FrozenSet[Card]:

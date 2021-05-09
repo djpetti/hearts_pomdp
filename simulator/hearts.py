@@ -2,7 +2,45 @@ import random
 from tkinter import StringVar, mainloop
 from tkinter.ttk import Button, Label, OptionMenu
 
-import classes
+from . import classes
+
+trick = classes.Trick()
+
+player_first = True
+
+player_has_chosen_card_for_this_trick = False
+
+player_card_buttons = {}
+computer_card_buttons = {}
+trick_card_buttons = {}
+
+leading_suit = "Clubs"
+hearts_broken = False
+
+game = classes.Game()
+player_label = Label(game.get_root(), text="")
+computer_label = Label(game.get_root(), text="")
+game_label = Label(game.get_root(), text="")
+
+player_score_label = Label(game.get_root(), text="")
+computer_score_label = Label(game.get_root(), text="")
+
+players = game.get_players()
+player = players[0]
+computer = players[1]
+
+player_goes = True
+first_play = True
+
+queen_of_spades_value = 7
+
+number_of_rounds = 5
+
+current_round = 1
+
+deck = classes.Deck()
+# datatype of menu text
+clicked = StringVar()
 
 
 def continue_game():
@@ -448,91 +486,54 @@ def delete_ask_button_and_start_game(start_game_button, drop, label):
     start_game()
 
 
-trick = classes.Trick()
+def main():
+    deck.shuffle()
+    deck.randomly_drop_cards()
+    deck.deal_cards([player, computer])
 
-player_first = True
+    round_options = [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+    ]
 
-player_has_chosen_card_for_this_trick = False
+    # initial menu text
+    clicked.set("5")
 
-player_card_buttons = {}
-computer_card_buttons = {}
-trick_card_buttons = {}
+    # Create Dropdown menu
+    drop = OptionMenu(game.get_root(), clicked, *round_options)
+    drop.place(x=1010, y=450)
 
-leading_suit = "Clubs"
-hearts_broken = False
+    # Create Label
+    label = Label(
+        game.get_root(), text=" How many rounds would you like to play?"
+    )
+    label.place(x=740, y=450)
 
-game = classes.Game()
+    start_game_button = Button(
+        game.get_root(),
+        text="Play Hearts!",
+        command=lambda: delete_ask_button_and_start_game(
+            start_game_button, drop, label
+        ),
+    )
+    start_game_button.place(x=840, y=500)
 
-player_label = Label(game.get_root(), text="")
-computer_label = Label(game.get_root(), text="")
-game_label = Label(game.get_root(), text="")
-
-player_score_label = Label(game.get_root(), text="")
-computer_score_label = Label(game.get_root(), text="")
-
-players = game.get_players()
-player = players[0]
-computer = players[1]
-
-deck = classes.Deck()
-deck.shuffle()
-
-deck.randomly_drop_cards()
-deck.deal_cards([player, computer])
-
-player_goes = True
-first_play = True
-
-queen_of_spades_value = 7
-
-number_of_rounds = 5
-
-current_round = 1
-
-round_options = [
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9,
-    10,
-    11,
-    12,
-    13,
-    14,
-    15,
-    16,
-    17,
-    18,
-    19,
-    20,
-]
-
-# datatype of menu text
-clicked = StringVar()
-
-# initial menu text
-clicked.set("5")
-
-# Create Dropdown menu
-drop = OptionMenu(game.get_root(), clicked, *round_options)
-drop.place(x=1010, y=450)
-
-# Create Label
-label = Label(game.get_root(), text=" How many rounds would you like to play?")
-label.place(x=740, y=450)
-
-start_game_button = Button(
-    game.get_root(),
-    text="Play Hearts!",
-    command=lambda: delete_ask_button_and_start_game(
-        start_game_button, drop, label
-    ),
-)
-start_game_button.place(x=840, y=500)
-
-mainloop()
+    mainloop()

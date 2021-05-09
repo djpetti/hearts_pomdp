@@ -3,8 +3,6 @@ Script that performs policy planning with the hearts POMDP.
 """
 
 
-from functools import partial
-
 import pomdp_py
 from loguru import logger
 

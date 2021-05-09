@@ -1,5 +1,15 @@
 import random
+from pathlib import Path
 from tkinter import Canvas, PhotoImage, Tk
+
+_MODULE_DIR = Path(__file__).parent
+"""
+Location of this module.
+"""
+_ASSET_DIR = _MODULE_DIR / "assets"
+"""
+Location of the assets for this game.
+"""
 
 
 class Card:
@@ -25,7 +35,8 @@ class Card:
         else:
             val = str(self.value)
 
-        photo = PhotoImage(file=r"" + val + suit + ".png")
+        asset_path = _ASSET_DIR / f"{val}{suit}.png"
+        photo = PhotoImage(file=asset_path.as_posix())
         self.image = photo.subsample(6, 6)
 
     def get_value(self):
@@ -75,7 +86,7 @@ class Deck:
         self.deck.append(Card("Diamonds", "Ace"))
         self.deck.append(Card("Clubs", "Ace"))
         self.deck.append(Card("Spades", "Ace"))
-        photo = PhotoImage(file=r"red_back.png")
+        photo = PhotoImage(file=(_ASSET_DIR / "red_back.png").as_posix())
         self.back_image = photo.subsample(6, 6)
 
     def shuffle(self):

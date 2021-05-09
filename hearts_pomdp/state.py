@@ -81,6 +81,7 @@ class ObservableStateMixin:
 
         is_first_trick: Whether this is the first trick.
         agent_goes_first: Whether the agent is going first in the next trick.
+        hearts_broken: Whether hearts have been broken.
 
     """
 
@@ -91,6 +92,7 @@ class ObservableStateMixin:
 
     is_first_trick: bool
     agent_goes_first: bool
+    hearts_broken: bool
 
     @validator("agent_hand")
     def hand_1_is_not_too_big(cls, hand: FrozenSet[Card]) -> FrozenSet[Card]:
@@ -267,4 +269,5 @@ def random_initial_state() -> State:
         opponent_partial_play=opponent_partial_play,
         is_first_trick=True,
         agent_goes_first=agent_goes_first,
+        hearts_broken=False,
     )

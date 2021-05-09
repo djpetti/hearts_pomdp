@@ -58,9 +58,9 @@ class TransitionModel(pomdp_py.TransitionModel):
 
         """
         if state.is_first_trick:
-            # We have to lead with the two of clubs. Note that a valid state
+            # We nominally lead with the two of clubs. Note that a valid state
             # initialization always makes the player with the two of clubs
-            # the first player, so if we don't have it, it should be held out.
+            # the first player, so if we don't have it, it can only be held out.
             assert (
                 cls._TWO_OF_CLUBS not in state.second_player_hand
             ), "Second player shouldn't have the two of clubs."
@@ -73,8 +73,17 @@ class TransitionModel(pomdp_py.TransitionModel):
             return {first_card}
 
         else:
-            # Nominally, we can lead with anything.
-            return state.first_player_hand
+            # Normally, we can lead with anything.
+            possible_plays = state.first_player_hand
+
+            if not state.hearts_broken:
+                # Hearts have not been broken, so we cannot lead with one.
+                possible_plays -= cls._ALL_HEARTS
+            if len(possible_plays) == 0:
+                # ...except when we have nothing BUT hearts.
+                possible_plays = state.first_player_hand
+
+            return possible_plays
 
     @classmethod
     def __possible_second_plays(
@@ -123,6 +132,27 @@ class TransitionModel(pomdp_py.TransitionModel):
                 possible_plays = non_lead_suit - {cls._QUEEN_OF_SPADES}
 
         return possible_plays
+
+    @classmethod
+    def __handle_heartbreak(cls, next_state: State) -> State:
+        """
+        `assert "It's going to be okay"`
+
+        Keeps track of when hearts have been broken and updates the state
+        accordingly.
+
+        Args:
+            next_state: The partially-updated state encompassing the results
+                of the current trick.
+
+        Returns:
+            The updated state.
+
+        """
+        if next_state.second_play.suit == Suit.HEARTS:
+            # Hearts have been broken.
+            return py_dataclasses.replace(next_state, hearts_broken=True)
+        return next_state
 
     @classmethod
     def __handle_trick_winner(cls, next_state: State) -> State:
@@ -215,6 +245,7 @@ class TransitionModel(pomdp_py.TransitionModel):
             opponent_play=player_2_play,
         )
 
+        next_state = cls.__handle_heartbreak(next_state)
         # Handle additional modifications based on the winner of this trick.
         return cls.__handle_trick_winner(next_state)
 
@@ -256,6 +287,7 @@ class TransitionModel(pomdp_py.TransitionModel):
             next_state, agent_hand=player_2_hand, agent_play=action.card
         )
 
+        next_state = cls.__handle_heartbreak(next_state)
         # Handle additional modifications based on the winner of this trick.
         return cls.__handle_trick_winner(next_state)
 

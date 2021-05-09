@@ -3,9 +3,7 @@ Miscellaneous common utilities.
 """
 
 
-from typing import Iterable, Optional
-
-from .state import Card, State, Suit
+from .state import Card, State
 
 
 def lead_won_trick(*, lead_card: Card, second_card: Card) -> bool:

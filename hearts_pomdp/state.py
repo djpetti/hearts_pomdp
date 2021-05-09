@@ -7,7 +7,7 @@ import enum
 import itertools
 import random
 from functools import cached_property
-from typing import Any, Dict, FrozenSet, Optional
+from typing import Any, Dict, FrozenSet, Iterable, Optional
 
 import pomdp_py
 from pydantic import validator
@@ -205,6 +205,28 @@ class State(pomdp_py.State, ObservableStateMixin):
 _TWO_OF_CLUBS = Card(suit=Suit.CLUBS, value=CardValue.TWO)
 
 
+def lowest_club(hand: Iterable[Card]) -> Optional[Card]:
+    """
+    Finds the lowest club in a hand.
+
+    Args:
+        hand: The hand to look in.
+
+    Returns:
+        The lowest club, or None if there are no clubs.
+
+    """
+    # Extract and sort the clubs.
+    all_clubs = [c for c in hand if c.suit == Suit.CLUBS]
+    all_clubs.sort(key=lambda c: c.value)
+
+    if len(all_clubs) == 0:
+        # No clubs.
+        return None
+    else:
+        return all_clubs[0]
+
+
 def random_initial_state() -> State:
     """
     Generates a random valid initial state for the game.
@@ -222,12 +244,19 @@ def random_initial_state() -> State:
     held_out = frozenset(deck)
 
     # Determine which player goes first.
-    agent_goes_first = _TWO_OF_CLUBS in agent_hand
+    agent_lowest_club = lowest_club(agent_hand)
+    opponent_lowest_club = lowest_club(opponent_hand)
+    agent_goes_first = True
+    if agent_lowest_club is None:
+        agent_goes_first = False
+    elif opponent_lowest_club is not None:
+        agent_goes_first = agent_lowest_club.value < opponent_lowest_club.value
+
     opponent_partial_play = None
     if not agent_goes_first:
         # In this case, it expects us to perform the first opponent play.
-        opponent_partial_play = _TWO_OF_CLUBS
-        opponent_hand -= {_TWO_OF_CLUBS}
+        opponent_partial_play = opponent_lowest_club
+        opponent_hand -= {opponent_lowest_club}
 
     return State(
         agent_hand=agent_hand,

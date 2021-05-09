@@ -10,7 +10,7 @@ from typing import AbstractSet, Any
 import pomdp_py
 
 from ..action import Action
-from ..state import ALL_CARDS, Card, CardValue, State, Suit
+from ..state import ALL_CARDS, Card, CardValue, State, Suit, lowest_club
 from ..utils import agent_won_trick
 
 
@@ -60,11 +60,17 @@ class TransitionModel(pomdp_py.TransitionModel):
         if state.is_first_trick:
             # We have to lead with the two of clubs. Note that a valid state
             # initialization always makes the player with the two of clubs
-            # the first player, so if we don't have it, that's an error.
+            # the first player, so if we don't have it, it should be held out.
             assert (
-                cls._TWO_OF_CLUBS in state.first_player_hand
-            ), "First player does not have two of clubs."
-            return {cls._TWO_OF_CLUBS}
+                cls._TWO_OF_CLUBS not in state.second_player_hand
+            ), "Second player shouldn't have the two of clubs."
+
+            # Play our lowest club.
+            first_card = lowest_club(state.first_player_hand)
+            assert (
+                first_card is not None
+            ), "Player should not be first if they have no clubs."
+            return {first_card}
 
         else:
             # Nominally, we can lead with anything.

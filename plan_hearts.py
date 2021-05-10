@@ -59,7 +59,7 @@ def update_planner(model: Hearts, planner: pomdp_py.Planner) -> None:
         # This is kind of a hack to bypass the naive particle reinvigoration
         # that it uses by default. In this case, the state transformer
         # function actually just generates a new particle from scratch.
-        state_transform_func=lambda s: random_particle(model),
+        state_transform_func=lambda s: random_particle(model.env.state),
     )
 
 

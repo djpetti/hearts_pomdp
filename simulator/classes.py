@@ -1,6 +1,10 @@
 import random
+from functools import cached_property
 from pathlib import Path
 from tkinter import Canvas, PhotoImage, Tk
+
+from hearts_pomdp.state import Card as PomdpCard
+from hearts_pomdp.state import CardValue, Suit
 
 _MODULE_DIR = Path(__file__).parent
 """
@@ -16,8 +20,6 @@ class Card:
     def __init__(self, suit, value):
         self.suit = suit
         self.value = value
-        val = ""
-        suit = ""
 
         if self.suit == "Clubs":
             suit = "C"
@@ -39,6 +41,43 @@ class Card:
         photo = PhotoImage(file=asset_path.as_posix())
         self.image = photo.subsample(6, 6)
 
+    def __eq__(self, other: "Card") -> bool:
+        if type(other) != Card:
+            return False
+
+        return self.suit == other.suit and self.value == other.value
+
+    def __hash__(self) -> int:
+        return hash(self.suit) ^ hash(self.value)
+
+    @classmethod
+    def from_pomdp_card(cls, pomdp_card: PomdpCard) -> "Card":
+        """
+        Creates a card from the equivalent POMDP card.
+
+        Args:
+            pomdp_card: The POMDP card to base it on.
+
+        Returns:
+            The `Card` that it created.
+
+        """
+        suit_mapping = {
+            Suit.CLUBS: "Clubs",
+            Suit.HEARTS: "Hearts",
+            Suit.DIAMONDS: "Diamonds",
+            Suit.SPADES: "Spades",
+        }
+        value_mapping = {CardValue.QUEEN: "Queen", CardValue.ACE: "Ace"}
+
+        suit = suit_mapping[pomdp_card.suit]
+        value = value_mapping.get(pomdp_card.value)
+        if value is None:
+            # It is not a face card.
+            value = str(pomdp_card.value.value)
+
+        return cls(suit, value)
+
     def get_value(self):
         return self.value
 
@@ -50,6 +89,29 @@ class Card:
 
     def get_image(self):
         return self.image
+
+    @cached_property
+    def pomdp_card(self) -> PomdpCard:
+        """
+        Returns:
+            Representation for this card as used by the POMDP solver.
+
+        """
+        suit_mapping = {
+            "Clubs": Suit.CLUBS,
+            "Hearts": Suit.HEARTS,
+            "Diamonds": Suit.DIAMONDS,
+            "Spades": Suit.SPADES,
+        }
+        value_mapping = {"Queen": CardValue.QUEEN, "Ace": CardValue.ACE}
+
+        suit = suit_mapping[self.suit]
+        value = value_mapping.get(self.value)
+        if value is None:
+            # It is not a face card.
+            value = CardValue(int(self.value))
+
+        return PomdpCard(suit=suit, value=value)
 
 
 class Deck:
@@ -171,11 +233,11 @@ class Hand:
     def __init__(self, cards):
         self.hand = cards
 
-    def remove_card(self, Card):
-        if Card not in self.hand:
-            print("You cannot remove a card that is not in your hand...")
-            return
-        self.hand.remove(Card)
+    def remove_card(self, card):
+        assert (
+            card in self.hand
+        ), "You cannot remove a card that is not in your hand."
+        self.hand.remove(card)
 
     def get_hand(self):
         return self.hand
@@ -244,6 +306,7 @@ class Player:
 class Trick:
     def __init__(self):
         self.card_dict = {}
+        self.previous_card_dict = {}
         self.first_to_play = None
         self.winner = None
 
@@ -262,10 +325,25 @@ class Trick:
     def get_trick(self):
         return self.card_dict
 
+    def get_last_trick(self):
+        """
+        Returns:
+            The previous trick that was played.
+
+        """
+        return self.previous_card_dict
+
     def get_cards(self):
         return list(self.card_dict.values())
 
-    def reset(self):
+    def go_to_next_trick(self):
+        """
+        Advances to the next trick, resetting the state, and saving the
+        current trick.
+
+        """
+        self.previous_card_dict = self.card_dict.copy()
+
         self.card_dict = {}
         self.first_to_play = None
         self.winner = None

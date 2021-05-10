@@ -36,6 +36,7 @@ class Hearts(pomdp_py.POMDP):
                 based on the observable state if not provided.
 
         """
+        logger.debug("Initializing with state: {}", initial_state)
         if initial_belief is None:
             # Generate the uniform belief.
             initial_belief = self.__uniform_belief(initial_state)

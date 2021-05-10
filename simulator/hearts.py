@@ -1,8 +1,13 @@
-import random
 from tkinter import StringVar, mainloop
 from tkinter.ttk import Button, Label, OptionMenu
 
+from loguru import logger
+
+from hearts_pomdp.observation import Observation
+from hearts_pomdp.state import State
+
 from . import classes
+from .pomdp_agent import PomdpAgent
 
 trick = classes.Trick()
 
@@ -42,9 +47,30 @@ deck = classes.Deck()
 # datatype of menu text
 clicked = StringVar()
 
+# The agent that is choosing moves for the computer.
+g_computer_agent = None
+
+
+def _update_agent() -> None:
+    """
+    Updates the agent's observation, initializing it if necessary.
+
+    """
+    global g_computer_agent
+
+    if g_computer_agent is None:
+        logger.debug("Initializing POMDP agent.")
+        g_computer_agent = PomdpAgent(initial_state=_equivalent_pomdp_state())
+    else:
+        # Update the current agent observation.
+        g_computer_agent.update(
+            _equivalent_pomdp_observation(), _equivalent_pomdp_state()
+        )
+
 
 def continue_game():
     global player_first
+
     if not player_first:
         computer_turn()
     else:
@@ -99,7 +125,7 @@ def players_turn(card):
 
     first_play = False
 
-    update_player_text("Player played the " + card.get_description() + "!")
+    update_player_text("Agent played the " + card.get_description() + "!")
 
     player_has_chosen_card_for_this_trick = True
 
@@ -114,8 +140,8 @@ def players_turn(card):
     )
     trick_card_buttons[card.get_description()].place(x=815, y=530)
 
-    player_card_buttons.get(card.get_description()).destroy()
-    del player_card_buttons[card.get_description()]
+    player_card_buttons.get(card).destroy()
+    del player_card_buttons[card]
 
     if not player_first:
 
@@ -128,7 +154,7 @@ def players_turn(card):
 
         if winner == "Tom":
             update_game_text(
-                "Player won this trick and will start the next one!"
+                "Agent won this trick and will start the next one!"
             )
         else:
             update_game_text(
@@ -145,7 +171,7 @@ def players_turn(card):
             next_trick_button.place(x=150, y=580)
 
             if winner == "Tom":
-                update_game_text("Player won this trick!")
+                update_game_text("Agent won this trick!")
             else:
                 update_game_text("Computer won this trick!")
 
@@ -163,6 +189,9 @@ def players_turn(card):
 
 
 def next_trick(next_trick_button):
+    global trick
+    global g_last_trick
+
     trick_cards = trick.get_cards()
 
     global player_has_chosen_card_for_this_trick
@@ -173,7 +202,7 @@ def next_trick(next_trick_button):
         del trick_card_buttons[card.get_description()]
 
     trick.remove_cards_from_players_hands()
-    trick.reset()
+    trick.go_to_next_trick()
     next_trick_button.destroy()
 
     remove_all_text()
@@ -181,29 +210,96 @@ def next_trick(next_trick_button):
     continue_game()
 
 
+def _equivalent_pomdp_observation() -> Observation:
+    """
+    Generates a POMDP observation that is equivalent to the current game state.
+
+    Returns:
+        The observation that it generated.
+
+    """
+    state = _equivalent_pomdp_state()
+
+    return Observation(
+        agent_hand=state.agent_hand,
+        agent_play=state.agent_play,
+        opponent_play=state.opponent_play,
+        opponent_partial_play=state.opponent_partial_play,
+        is_first_trick=state.is_first_trick,
+        agent_goes_first=state.agent_goes_first,
+        hearts_broken=state.hearts_broken,
+        opponent_hand_size=len(state.opponent_hand),
+    )
+
+
+def _equivalent_pomdp_state() -> State:
+    """
+    Generates a POMDP state that is equivalent to the current game state.
+
+    Returns:
+        The state that it generated.
+
+    """
+    computer_cards = computer.get_hand().get_hand()
+    agent_hand = {c.pomdp_card for c in computer_cards}
+
+    trick_cards = trick.get_trick()
+    opponent_partial_play = None
+    if trick_cards:
+        # The player played first.
+        opponent_partial_play = trick_cards[player].pomdp_card
+
+    # Update the plays from the last complete trick.
+    agent_play = None
+    opponent_play = None
+    last_trick_cards = trick.get_last_trick()
+    if last_trick_cards:
+        agent_play = last_trick_cards[computer].pomdp_card
+        opponent_play = last_trick_cards[player].pomdp_card
+
+    # Get unobservable state.
+    player_cards = player.get_hand().get_hand()
+    opponent_hand = {c.pomdp_card for c in player_cards}
+    if opponent_partial_play:
+        # If the trick isn't complete yet, we won't have updated used cards.
+        opponent_hand -= {opponent_partial_play}
+
+    held_out_cards = {c.pomdp_card for c in deck.get_dropped_cards()}
+
+    return State(
+        opponent_hand=opponent_hand,
+        held_out_cards=held_out_cards,
+        agent_hand=agent_hand,
+        agent_play=agent_play,
+        opponent_play=opponent_play,
+        opponent_partial_play=opponent_partial_play,
+        is_first_trick=first_play,
+        agent_goes_first=not player_first,
+        hearts_broken=hearts_broken,
+    )
+
+
 def computer_turn():
-    cards = computer.get_hand().get_hand()
-    rand = int(random.random() * len(cards))
     global hearts_broken
     global player_first
     global leading_suit
     global first_play
 
-    card = cards[rand]
+    _update_agent()
+    assert g_computer_agent is not None
 
-    if player_first:
-        if card.get_suit() != leading_suit:
-            if computer.get_hand().contains_suit(leading_suit):
-                computer_turn()
-                return
-    else:
+    # Get the next thing to play.
+    card = g_computer_agent.get_next_play()
+    card = classes.Card.from_pomdp_card(card)
+    assert card in computer.get_hand().get_hand()
+
+    if not player_first:
         if (
             first_play
             and card.get_suit() != "Clubs"
             and computer.get_hand().contains_suit("Clubs")
         ):
-            computer_turn()
-            return
+            raise ValueError("Agent attempted to lead a non-club.")
 
         if card.get_suit() == "Hearts":
             if not hearts_broken:
@@ -212,8 +308,7 @@ def computer_turn():
                     or computer.get_hand().contains_suit("Clubs")
                     or computer.get_hand().contains_suit("Diamonds")
                 ):
-                    computer_turn()
-                    return
+                    raise ValueError("Agent attempted to lead a heart.")
         leading_suit = card.get_suit()
 
     if card.get_suit() == "Hearts":
@@ -224,8 +319,8 @@ def computer_turn():
 
     trick.add_card_to_trick(card, computer)
 
-    computer_card_buttons.get(card.get_description()).destroy()
-    del computer_card_buttons[card.get_description()]
+    computer_card_buttons.get(card).destroy()
+    del computer_card_buttons[card]
 
     image = card.get_image()
 
@@ -238,7 +333,6 @@ def computer_turn():
     trick_card_buttons[card.get_description()].place(x=815, y=280)
 
     if player_first:
-
         winner = trick.get_winner()
 
         if winner == "Tom":
@@ -248,7 +342,7 @@ def computer_turn():
 
         if winner == "Tom":
             update_game_text(
-                "Player won this trick and will start the next one!"
+                "Agent won this trick and will start the next one!"
             )
         else:
             update_game_text(
@@ -265,7 +359,7 @@ def computer_turn():
             next_trick_button.place(x=150, y=580)
 
             if winner == "Tom":
-                update_game_text("Player won this trick!")
+                update_game_text("Agent won this trick!")
             else:
                 update_game_text("Computer won this trick!")
 
@@ -300,16 +394,16 @@ def start_game():
 def create_card_button(x, y, card, photo, root, player):
 
     if player == "player":
-        player_card_buttons[card.get_description()] = Button(
+        player_card_buttons[card] = Button(
             root, image=photo, command=lambda: players_turn(card), width=1
         )
-        player_card_buttons.get(card.get_description()).place(x=x, y=y)
+        player_card_buttons.get(card).place(x=x, y=y)
 
     else:
-        computer_card_buttons[card.get_description()] = Button(
+        computer_card_buttons[card] = Button(
             root, image=photo, command=lambda: players_turn("pass"), width=1
         )
-        computer_card_buttons.get(card.get_description()).place(x=x, y=y)
+        computer_card_buttons.get(card).place(x=x, y=y)
 
 
 def show_hand(hand, root, player="player"):
@@ -451,7 +545,7 @@ def start_new_round(next_trick_button):
         del trick_card_buttons[card.get_description()]
 
     trick.remove_cards_from_players_hands()
-    trick.reset()
+    trick.go_to_next_trick()
 
     remove_all_text()
 
@@ -461,7 +555,7 @@ def start_new_round(next_trick_button):
     else:
 
         if player.get_points() < computer.get_points():
-            winner = "Player"
+            winner = "Agent"
         else:
             winner = "Computer"
 
@@ -486,7 +580,7 @@ def delete_ask_button_and_start_game(start_game_button, drop, label):
     start_game()
 
 
-def main():
+def main() -> None:
     deck.shuffle()
     deck.randomly_drop_cards()
     deck.deal_cards([player, computer])

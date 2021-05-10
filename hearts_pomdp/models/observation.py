@@ -37,6 +37,7 @@ class ObservationModel(pomdp_py.ObservationModel):
             is_first_trick=state.is_first_trick,
             agent_goes_first=state.agent_goes_first,
             hearts_broken=state.hearts_broken,
+            opponent_hand_size=len(state.opponent_hand),
         )
 
     def probability(

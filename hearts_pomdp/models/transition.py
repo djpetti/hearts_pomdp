@@ -69,7 +69,7 @@ class TransitionModel(pomdp_py.TransitionModel):
             first_card = lowest_club(state.first_player_hand)
             assert (
                 first_card is not None
-            ), "Player should not be first if they have no clubs."
+            ), "Agent should not be first if they have no clubs."
             return {first_card}
 
         else:
@@ -232,7 +232,7 @@ class TransitionModel(pomdp_py.TransitionModel):
 
         # Determine possible plays for player 2.
         player_2_plays = cls.__possible_second_plays(next_state, state)
-        assert len(player_2_plays) > 0, "Player 2 ended up with fewer cards."
+        assert len(player_2_plays) > 0, "Agent 2 ended up with fewer cards."
 
         # Select one randomly.
         player_2_play = random.choice(tuple(player_2_plays))
@@ -275,7 +275,7 @@ class TransitionModel(pomdp_py.TransitionModel):
             return nop_state
 
         player_2_plays = cls.__possible_second_plays(next_state, state)
-        assert len(player_2_plays) > 0, "Player 2 ended up with fewer cards."
+        assert len(player_2_plays) > 0, "Agent 2 ended up with fewer cards."
         if action.card not in player_2_plays:
             # Action is invalid. This is a nop.
             return nop_state

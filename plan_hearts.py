@@ -11,7 +11,7 @@ from hearts_pomdp.models.pomdp import Hearts
 from hearts_pomdp.particles import random_particle
 
 # How long to allow for each planning step, in seconds.
-_MAX_PLAN_TIME = 5.0
+_MAX_PLAN_TIME = 10.0
 
 
 def update_planner(model: Hearts, planner: pomdp_py.Planner) -> None:
@@ -44,6 +44,11 @@ def update_planner(model: Hearts, planner: pomdp_py.Planner) -> None:
     )
     logger.info("Agent hand: {}", model.env.state.agent_hand)
     logger.info("Opponent hand: {}", model.env.state.opponent_hand)
+    logger.info(
+        "Moonshot: {}, {}",
+        model.env.state.agent_took_all_penalties,
+        model.env.state.opponent_took_all_penalties,
+    )
     logger.info("Reward: {}", reward)
 
     # Simulate an observation.
@@ -76,9 +81,9 @@ def main():
     # Create the planner.
     planner = pomdp_py.POMCP(
         max_depth=13,
-        discount_factor=1.0,
+        discount_factor=0.95,
         planning_time=_MAX_PLAN_TIME,
-        exploration_const=10,
+        exploration_const=30,
         rollout_policy=model.agent.policy_model,
     )
 

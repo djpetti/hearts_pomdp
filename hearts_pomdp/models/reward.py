@@ -27,7 +27,11 @@ class RewardModel(pomdp_py.RewardModel):
     """
     Reward for taking the queen of spades.
     """
-    _NOP_REWARD = -15.0
+    _MOONSHOT_REWARD = 20.0
+    """
+    Reward for shooting the moon.
+    """
+    _NOP_REWARD = -25.0
     """
     Cost associated with a nop. We make this large, because the agent should
     always be able to make a play that does not result in a nop.
@@ -57,6 +61,35 @@ class RewardModel(pomdp_py.RewardModel):
 
         return win_reward
 
+    @classmethod
+    def __check_moonshot_reward(cls, next_state: State) -> float:
+        """
+        Checks if a player shot the moon and gets the requisite reward.
+
+        Args:
+            next_state: The updated state.
+
+        Returns:
+            0 if neither player shot the moon. Otherwise, the requisite reward
+            for the agent, based on who shot the moon.
+
+        """
+        if (
+            len(next_state.agent_hand) != 0
+            or len(next_state.opponent_hand) != 0
+        ):
+            # The game is not finished yet, so we can't check this.
+            return 0.0
+
+        if next_state.agent_took_all_penalties:
+            # Agent shot the moon.
+            return cls._MOONSHOT_REWARD
+        elif next_state.opponent_took_all_penalties:
+            # Opponent shot the moon.
+            return -cls._MOONSHOT_REWARD
+        else:
+            return 0.0
+
     def sample(
         self, state: State, action: Action, next_state: State, **kwargs: Any
     ) -> float:
@@ -81,7 +114,11 @@ class RewardModel(pomdp_py.RewardModel):
         win_reward = self.__trick_reward(
             {next_state.lead_play, next_state.second_play}
         )
-        if agent_won_trick(next_state):
-            return win_reward
-        else:
-            return 0.0
+        reward = win_reward
+        if not agent_won_trick(next_state):
+            # Make this a zero-sum game.
+            reward = -win_reward
+
+        reward += self.__check_moonshot_reward(next_state)
+
+        return reward

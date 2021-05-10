@@ -228,6 +228,8 @@ def _equivalent_pomdp_observation() -> Observation:
         is_first_trick=state.is_first_trick,
         agent_goes_first=state.agent_goes_first,
         hearts_broken=state.hearts_broken,
+        agent_took_all_penalties=state.agent_took_all_penalties,
+        opponent_took_all_penalties=state.opponent_took_all_penalties,
         opponent_hand_size=len(state.opponent_hand),
     )
 
@@ -276,6 +278,8 @@ def _equivalent_pomdp_state() -> State:
         is_first_trick=first_play,
         agent_goes_first=not player_first,
         hearts_broken=hearts_broken,
+        agent_took_all_penalties=not player.won_penalty_cards(),
+        opponent_took_all_penalties=not computer.won_penalty_cards(),
     )
 
 
@@ -528,6 +532,11 @@ def start_new_round(next_trick_button):
     global hearts_broken
     global first_play
     global player_has_chosen_card_for_this_trick
+    global g_computer_agent
+
+    # Force it to create a fresh agent.
+    g_computer_agent = None
+
     next_trick_button.destroy()
     deck = classes.Deck()
     deck.shuffle()
@@ -544,7 +553,6 @@ def start_new_round(next_trick_button):
         trick_card_buttons.get(card.get_description()).destroy()
         del trick_card_buttons[card.get_description()]
 
-    trick.remove_cards_from_players_hands()
     trick.go_to_next_trick()
 
     remove_all_text()

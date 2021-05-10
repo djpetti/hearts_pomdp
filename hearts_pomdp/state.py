@@ -55,6 +55,17 @@ class Card:
     suit: Suit
     value: CardValue
 
+    @cached_property
+    def is_penalty(self) -> bool:
+        """
+        Returns:
+            True if the card is a penalty card.
+
+        """
+        return self.suit == Suit.HEARTS or (
+            self == Card(suit=Suit.SPADES, value=CardValue.QUEEN)
+        )
+
 
 ALL_CARDS = frozenset(
     {Card(s, v) for s, v in itertools.product(Suit, CardValue)}
@@ -82,6 +93,10 @@ class ObservableStateMixin:
         is_first_trick: Whether this is the first trick.
         agent_goes_first: Whether the agent is going first in the next trick.
         hearts_broken: Whether hearts have been broken.
+        agent_took_all_penalties: Whether the agent has taken all penalty cards
+            so far.
+        opponent_took_all_penalties: Whether the opponent has taken all penalty
+            cards so far.
 
     """
 
@@ -93,6 +108,8 @@ class ObservableStateMixin:
     is_first_trick: bool
     agent_goes_first: bool
     hearts_broken: bool
+    agent_took_all_penalties: bool
+    opponent_took_all_penalties: bool
 
     @validator("agent_hand")
     def hand_1_is_not_too_big(cls, hand: FrozenSet[Card]) -> FrozenSet[Card]:
@@ -270,4 +287,6 @@ def random_initial_state() -> State:
         is_first_trick=True,
         agent_goes_first=agent_goes_first,
         hearts_broken=False,
+        agent_took_all_penalties=True,
+        opponent_took_all_penalties=True,
     )

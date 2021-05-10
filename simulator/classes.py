@@ -286,9 +286,20 @@ class Player:
     def set_cards(self, cards):
         self.hand = cards
 
-    def set_won_cards(self, cards):
+    def add_won_cards(self, cards):
         for card in cards:
             self.won_cards.append(card)
+
+    def won_penalty_cards(self) -> bool:
+        """
+        Returns:
+            True if the player won any penalty cards.
+
+        """
+        for card in self.won_cards:
+            if card.pomdp_card.is_penalty:
+                return True
+        return False
 
     def get_won_cards(self):
         return self.won_cards
@@ -373,15 +384,15 @@ class Trick:
         if cards[0].get_suit() == cards[1].get_suit():
             if val1 > val2:
                 self.winner = players[0]
-                self.winner.set_won_cards(cards)
+                self.winner.add_won_cards(cards)
                 return self.winner.get_name()
             else:
                 self.winner = players[1]
-                self.winner.set_won_cards(cards)
+                self.winner.add_won_cards(cards)
                 return self.winner.get_name()
         else:
             self.winner = self.first_to_play
-            self.winner.set_won_cards(cards)
+            self.winner.add_won_cards(cards)
             return self.winner.get_name()
 
 

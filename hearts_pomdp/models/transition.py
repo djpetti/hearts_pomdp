@@ -149,10 +149,52 @@ class TransitionModel(pomdp_py.TransitionModel):
             The updated state.
 
         """
-        if next_state.second_play.suit == Suit.HEARTS:
+        if (
+            next_state.second_play.suit == Suit.HEARTS
+            or next_state.lead_play.suit == Suit.HEARTS
+            or next_state.opponent_partial_play == Suit.HEARTS
+        ):
             # Hearts have been broken.
             return py_dataclasses.replace(next_state, hearts_broken=True)
         return next_state
+
+    @classmethod
+    def __handle_moonshot(cls, next_state: State) -> State:
+        """
+        Keeps track of whether players are shooting the moon, and updates
+        the state accordingly.
+
+        Args:
+            next_state: The partially-updated state, encompassing the results
+                of the current trick.
+
+        Returns:
+            The updated state.
+
+        """
+        agent_took_all_penalties = next_state.agent_took_all_penalties
+        opponent_took_all_penalties = next_state.opponent_took_all_penalties
+
+        trick_painted = (
+            next_state.agent_play.is_penalty
+            or next_state.opponent_play.is_penalty
+        )
+
+        agent_won = agent_won_trick(next_state)
+        if trick_painted and agent_won:
+            # If the agent took a penalty card, the opponent can't shoot the
+            # moon.
+            opponent_took_all_penalties = False
+        elif trick_painted and not agent_won:
+            # Similarly, if the opponent took a penalty card, the agent can't
+            # shoot the moon.
+            agent_took_all_penalties = False
+
+        return py_dataclasses.replace(
+            next_state,
+            agent_took_all_penalties=agent_took_all_penalties,
+            opponent_took_all_penalties=opponent_took_all_penalties,
+        )
 
     @classmethod
     def __handle_trick_winner(cls, next_state: State) -> State:
@@ -169,6 +211,9 @@ class TransitionModel(pomdp_py.TransitionModel):
             The updated state.
 
         """
+        # Handle shooting the moon.
+        next_state = cls.__handle_moonshot(next_state)
+
         # Determine the first player for the next trick.
         next_state = py_dataclasses.replace(
             next_state, agent_goes_first=agent_won_trick(next_state)
@@ -245,9 +290,9 @@ class TransitionModel(pomdp_py.TransitionModel):
             opponent_play=player_2_play,
         )
 
-        next_state = cls.__handle_heartbreak(next_state)
         # Handle additional modifications based on the winner of this trick.
-        return cls.__handle_trick_winner(next_state)
+        next_state = cls.__handle_trick_winner(next_state)
+        return cls.__handle_heartbreak(next_state)
 
     @classmethod
     def __sample_agent_is_second(cls, state: State, action: Action) -> State:
@@ -287,9 +332,9 @@ class TransitionModel(pomdp_py.TransitionModel):
             next_state, agent_hand=player_2_hand, agent_play=action.card
         )
 
-        next_state = cls.__handle_heartbreak(next_state)
         # Handle additional modifications based on the winner of this trick.
-        return cls.__handle_trick_winner(next_state)
+        next_state = cls.__handle_trick_winner(next_state)
+        return cls.__handle_heartbreak(next_state)
 
     def sample(self, state: State, action: Action, **kwargs: Any) -> State:
         """

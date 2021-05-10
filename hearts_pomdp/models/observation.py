@@ -37,6 +37,8 @@ class ObservationModel(pomdp_py.ObservationModel):
             is_first_trick=state.is_first_trick,
             agent_goes_first=state.agent_goes_first,
             hearts_broken=state.hearts_broken,
+            agent_took_all_penalties=state.agent_took_all_penalties,
+            opponent_took_all_penalties=state.opponent_took_all_penalties,
             opponent_hand_size=len(state.opponent_hand),
         )
 

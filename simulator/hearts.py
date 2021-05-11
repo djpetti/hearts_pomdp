@@ -3,6 +3,8 @@ from tkinter.ttk import Button, Label, OptionMenu
 
 from loguru import logger
 
+import threading
+
 from hearts_pomdp.observation import Observation
 from hearts_pomdp.state import State
 
@@ -26,6 +28,7 @@ game = classes.Game()
 player_label = Label(game.get_root(), text="")
 computer_label = Label(game.get_root(), text="")
 game_label = Label(game.get_root(), text="")
+computer_thinking = Label(game.get_root(), text="")
 
 player_score_label = Label(game.get_root(), text="")
 computer_score_label = Label(game.get_root(), text="")
@@ -42,6 +45,8 @@ queen_of_spades_value = 7
 number_of_rounds = 5
 
 current_round = 1
+
+is_computer_thinking = False
 
 deck = classes.Deck()
 # datatype of menu text
@@ -72,14 +77,14 @@ def continue_game():
     global player_first
 
     if not player_first:
-        computer_turn()
+        add_computer_thinking_text_and_start_computer_turn()
     else:
         update_player_text("Alright, player it's your turn! Pick a Card.")
 
 
 def players_turn(card):
     global player_has_chosen_card_for_this_trick
-    if card == "pass" or player_has_chosen_card_for_this_trick:
+    if card == "pass" or player_has_chosen_card_for_this_trick or is_computer_thinking:
         return
 
     global leading_suit
@@ -98,11 +103,11 @@ def players_turn(card):
 
         if (
             first_play
-            and card.get_suit() != "Clubs"
-            and player.get_hand().contains_suit("Clubs")
+            and (card.get_suit() != "Clubs"
+            or player.get_hand().get_lowest_club() != int(card.get_value()))
         ):
             update_player_text(
-                "The first card of the game must be a Club! Try again."
+                "The first card of the game must be the lowest Club! Try again."
             )
             return
 
@@ -185,7 +190,7 @@ def players_turn(card):
             next_trick_button.place(x=150, y=580)
 
     else:
-        computer_turn()
+        add_computer_thinking_text_and_start_computer_turn()
 
 
 def next_trick(next_trick_button):
@@ -288,6 +293,7 @@ def computer_turn():
     global player_first
     global leading_suit
     global first_play
+    global is_computer_thinking
 
     _update_agent()
     assert g_computer_agent is not None
@@ -335,6 +341,10 @@ def computer_turn():
         width=1,
     )
     trick_card_buttons[card.get_description()].place(x=815, y=280)
+
+    remove_computer_thinking_text()
+
+    is_computer_thinking = False
 
     if player_first:
         winner = trick.get_winner()
@@ -448,6 +458,17 @@ def update_game_text(text):
     game_label = Label(game.get_root(), text=text, font=("Arial", 28))
     game_label.place(x=100, y=485)
 
+def add_computer_thinking_text_and_start_computer_turn():
+    global is_computer_thinking
+    global computer_thinking
+    is_computer_thinking = True
+    computer_thinking = Label(game.get_root(), text="Computer is deciding its next move...", font=("Arial", 28))
+    computer_thinking.place(x = 200, y = 500)
+    threading.Timer(1.5,computer_turn).start()
+
+def remove_computer_thinking_text():
+    global computer_thinking
+    computer_thinking.destroy()
 
 def remove_all_text():
     game_label.destroy()

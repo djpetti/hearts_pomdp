@@ -233,13 +233,16 @@ class TransitionModel(pomdp_py.TransitionModel):
         player_1_play = random.choice(tuple(player_1_plays))
         player_1_hand -= {player_1_play}
 
-        return py_dataclasses.replace(
+        next_state = py_dataclasses.replace(
             next_state,
             opponent_hand=player_1_hand,
             # Update the partial play variable since this is technically a
             # new trick.
             opponent_partial_play=player_1_play,
         )
+        # Update the heartbreak status again because we might have played a
+        # heart.
+        return cls.__handle_heartbreak(next_state)
 
     @classmethod
     def __sample_agent_is_first(cls, state: State, action: Action) -> State:
@@ -290,9 +293,9 @@ class TransitionModel(pomdp_py.TransitionModel):
             opponent_play=player_2_play,
         )
 
+        next_state = cls.__handle_heartbreak(next_state)
         # Handle additional modifications based on the winner of this trick.
-        next_state = cls.__handle_trick_winner(next_state)
-        return cls.__handle_heartbreak(next_state)
+        return cls.__handle_trick_winner(next_state)
 
     @classmethod
     def __sample_agent_is_second(cls, state: State, action: Action) -> State:
@@ -332,8 +335,8 @@ class TransitionModel(pomdp_py.TransitionModel):
             next_state, agent_hand=player_2_hand, agent_play=action.card
         )
 
-        # Handle additional modifications based on the winner of this trick.
         next_state = cls.__handle_trick_winner(next_state)
+        # Handle additional modifications based on the winner of this trick.
         return cls.__handle_heartbreak(next_state)
 
     def sample(self, state: State, action: Action, **kwargs: Any) -> State:

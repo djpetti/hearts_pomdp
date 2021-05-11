@@ -27,11 +27,11 @@ class RewardModel(pomdp_py.RewardModel):
     """
     Reward for taking the queen of spades.
     """
-    _MOONSHOT_REWARD = 20.0
+    _MOONSHOT_REWARD = 14.0
     """
     Reward for shooting the moon.
     """
-    _NOP_REWARD = -25.0
+    _NOP_REWARD = -19.0
     """
     Cost associated with a nop. We make this large, because the agent should
     always be able to make a play that does not result in a nop.

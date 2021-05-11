@@ -81,9 +81,9 @@ def main():
     # Create the planner.
     planner = pomdp_py.POMCP(
         max_depth=13,
-        discount_factor=0.95,
+        discount_factor=1.0,
         planning_time=_MAX_PLAN_TIME,
-        exploration_const=30,
+        exploration_const=40,
         rollout_policy=model.agent.policy_model,
     )
 

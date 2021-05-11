@@ -24,7 +24,7 @@ class PomdpAgent(Agent):
         *,
         initial_state: State,
         max_plan_time: float = 10.0,
-        exploration_const: float = 30.0
+        exploration_const: float = 40.0
     ):
         """
 

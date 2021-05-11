@@ -23,7 +23,7 @@ class RewardModel(pomdp_py.RewardModel):
     """
     Reward for winning a heart.
     """
-    _QUEEN_REWARD = -13.0
+    _QUEEN_REWARD = -7.0
     """
     Reward for taking the queen of spades.
     """
